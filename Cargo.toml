@@ -57,6 +57,10 @@ uuid = "^1.0"
 wasmtime = "0.39.1"
 webbrowser = "0.7.1"
 
+[patch."https://github.com/fermyon/bindle"]
+bindle = { git = "https://github.com/endocrimes/bindle", branch = "dani/backport-rate-limit" }
+
+
 [target.'cfg(target_os = "linux")'.dependencies]
 # This needs to be an explicit dependency to enable
 # '--features openssl/vendored', which is used for Linux releases.

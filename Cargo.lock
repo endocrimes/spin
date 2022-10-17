@@ -193,7 +193,7 @@ dependencies = [
 [[package]]
 name = "bindle"
 version = "0.8.0"
-source = "git+https://github.com/fermyon/bindle?tag=v0.8.1#0dd1e7a7747d9f0ea8fda61d5f0f8cc3550f65dd"
+source = "git+https://github.com/endocrimes/bindle?branch=dani/backport-rate-limit#527e1680176dd9bfb23aa7d4de99878cd9f17ed4"
 dependencies = [
  "anyhow",
  "async-compression",
