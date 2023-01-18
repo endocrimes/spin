@@ -46,8 +46,8 @@ impl KeyValueSqlite {
                 )
                 .map_err(log_error)?;
 
-            // Note: We could consider preparing all statements here and storing them for later use.  That
-            // would require `KeyValue` to be self-referential, in which case we'd need something like
+            // Note: We could consider preparing all statements here and storing them for later use.  That would
+            // require `KeyValueSqlite` to be self-referential, in which case we'd need something like
             // https://crates.io/crates/ouroboros.  That will only be worth pursuing if we find that statement
             // preparation is a significant performance bottleneck.
 
