@@ -95,6 +95,12 @@ impl<Executor: TriggerExecutor> TriggerExecutorBuilder<Executor> {
                 builder.add_host_component(outbound_redis::OutboundRedisComponent)?;
                 builder.add_host_component(outbound_pg::OutboundPg::default())?;
                 builder.add_host_component(outbound_mysql::OutboundMysql::default())?;
+
+                // TODO: Check app config to see if the app specifies a key/value store implementation to use;
+                // otherwise, use this as the default.  Also, pass the relevant part of the config on to the
+                // component constructor so it can configure itself.
+                builder.add_host_component(key_value_sqlite::KeyValueSqliteComponent)?;
+
                 self.loader.add_dynamic_host_component(
                     &mut builder,
                     outbound_http::OutboundHttpComponent,

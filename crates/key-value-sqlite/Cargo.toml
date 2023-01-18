@@ -1,0 +1,18 @@
+[package]
+name = "key-value-sqlite"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+
+[lib]
+doctest = false
+
+[dependencies]
+anyhow = "1.0"
+rusqlite = { version = "0.28.0", features = [ "bundled" ] }
+spin-core = { path = "../core" }
+tracing = { workspace = true }
+wit-bindgen-wasmtime = { workspace = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = [ "macros" ] }
