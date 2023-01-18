@@ -1,7 +1,6 @@
 type namespace = u32
 
 variant error {
-  invalid-name,
   namespace-table-full,
   invalid-namespace,
   no-such-key,
