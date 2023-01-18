@@ -91,16 +91,14 @@ impl KeyValue for KeyValueSqlite {
             .prepare("SELECT value FROM spin_key_value WHERE namespace=$1 AND key=$2")
             .map_err(log_error)?;
 
-        let value = stmt
+        let result = stmt
             .query_map([name, key], |row| row.get(0))
             .map_err(log_error)?
-            .collect::<Result<Vec<Vec<u8>>, _>>()
-            .map_err(log_error)?
-            .into_iter()
             .next()
-            .ok_or(Error::NoSuchKey)?;
+            .ok_or(Error::NoSuchKey)?
+            .map_err(log_error);
 
-        Ok(value)
+        result
     }
 
     async fn set(&mut self, namespace: Namespace, key: &str, value: &[u8]) -> Result<(), Error> {
