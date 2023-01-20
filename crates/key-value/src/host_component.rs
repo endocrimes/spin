@@ -1,11 +1,19 @@
 use spin_core::HostComponent;
 
-use crate::KeyValueSqlite;
+use crate::{Config, KeyValueDispatch};
 
-pub struct KeyValueSqliteComponent;
+pub struct KeyValueComponent {
+    config: Config,
+}
 
-impl HostComponent for KeyValueSqliteComponent {
-    type Data = KeyValueSqlite;
+impl KeyValueComponent {
+    pub fn new(config: Config) -> Self {
+        Self { config }
+    }
+}
+
+impl HostComponent for KeyValueComponent {
+    type Data = KeyValueDispatch;
 
     fn add_to_linker<T: Send>(
         linker: &mut spin_core::Linker<T>,
@@ -15,6 +23,6 @@ impl HostComponent for KeyValueSqliteComponent {
     }
 
     fn build_data(&self) -> Self::Data {
-        Default::default()
+        KeyValueDispatch::new(self.config.clone())
     }
 }

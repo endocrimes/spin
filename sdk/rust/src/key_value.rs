@@ -1,21 +1,21 @@
 wit_bindgen_rust::import!("../../wit/ephemeral/key-value.wit");
 
-use key_value::Namespace as RawNamespace;
+use key_value::Store as RawStore;
 
-/// Errors which may be raised by the methods of `Namespace`
+/// Errors which may be raised by the methods of `Store`
 pub type Error = key_value::Error;
 
-/// Represents a namespace in which key value tuples may be placed
+/// Represents a store in which key value tuples may be placed
 #[derive(Clone, Debug)]
-pub struct Namespace(RawNamespace);
+pub struct Store(RawStore);
 
-impl Namespace {
-    /// Open the specified namespace.
+impl Store {
+    /// Open the specified store.
     pub fn open(name: impl AsRef<str>) -> Result<Self, Error> {
         key_value::open(name.as_ref()).map(Self)
     }
 
-    /// Get the value, if any, associated with the specified key in this namespace.
+    /// Get the value, if any, associated with the specified key in this store.
     ///
     /// If no value is found, this will return `Err(Error::NoSuchKey)`.
     pub fn get(&self, key: impl AsRef<str>) -> Result<Vec<u8>, Error> {
@@ -42,7 +42,7 @@ impl Namespace {
     }
 }
 
-impl Drop for Namespace {
+impl Drop for Store {
     fn drop(&mut self) {
         key_value::close(self.0)
     }

@@ -2,28 +2,34 @@ use anyhow::{ensure, Result};
 use spin_sdk::{
     http::{Request, Response},
     http_component,
-    key_value::{Error, Namespace},
+    key_value::{Error, Store},
 };
 
 #[http_component]
-fn handle_request(req: Request) -> Result<Response> {
-    let namespace = Namespace::open("foo")?;
+fn handle_request(_req: Request) -> Result<Response> {
+    let store = Store::open("foo")?;
 
-    ensure!(!namespace.exists("bar")?);
+    store.delete("bar")?;
 
-    ensure!(matches!(namespace.get("bar"), Err(Error::NoSuchKey)));
+    ensure!(!store.exists("bar")?);
 
-    namespace.set("bar", b"baz")?;
+    ensure!(matches!(store.get("bar"), Err(Error::NoSuchKey)));
 
-    ensure!(namespace.exists("bar")?);
+    store.set("bar", b"baz")?;
 
-    ensure!(b"baz" as &[_] == &namespace.get("bar")?);
+    ensure!(store.exists("bar")?);
 
-    namespace.delete("bar")?;
+    ensure!(b"baz" as &[_] == &store.get("bar")?);
 
-    ensure!(!namespace.exists("bar")?);
+    store.set("bar", b"wow")?;
 
-    ensure!(matches!(namespace.get("bar"), Err(Error::NoSuchKey)));
+    ensure!(b"wow" as &[_] == &store.get("bar")?);
+
+    store.delete("bar")?;
+
+    ensure!(!store.exists("bar")?);
+
+    ensure!(matches!(store.get("bar"), Err(Error::NoSuchKey)));
 
     Ok(http::Response::builder().status(200).body(None)?)
 }

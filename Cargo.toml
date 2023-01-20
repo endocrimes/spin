@@ -33,7 +33,7 @@ lazy_static = "1.4.0"
 nix = { version = "0.24", features = ["signal"] }
 outbound-http = { path = "crates/outbound-http" }
 outbound-redis = { path = "crates/outbound-redis" }
-key-value-sqlite = { path = "crates/key-value-sqlite" }
+key-value = { path = "crates/key-value" }
 path-absolutize = "3.0.11"
 rand = "0.8"
 regex = "1.5.5"
@@ -102,7 +102,7 @@ members = [
   "crates/manifest",
   "crates/outbound-http",
   "crates/outbound-redis",
-  "crates/key-value-sqlite",
+  "crates/key-value",
   "crates/plugins",
   "crates/redis",
   "crates/templates",

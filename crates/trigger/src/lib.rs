@@ -96,10 +96,25 @@ impl<Executor: TriggerExecutor> TriggerExecutorBuilder<Executor> {
                 builder.add_host_component(outbound_pg::OutboundPg::default())?;
                 builder.add_host_component(outbound_mysql::OutboundMysql::default())?;
 
-                // TODO: Check app config to see if the app specifies a key/value store implementation to use;
-                // otherwise, use this as the default.  Also, pass the relevant part of the config on to the
-                // component constructor so it can configure itself.
-                builder.add_host_component(key_value_sqlite::KeyValueSqliteComponent)?;
+                let parent_dir = match dirs::home_dir() {
+                    Some(home) => home.join(SPIN_HOME),
+                    None => PathBuf::new(),
+                };
+
+                // TODO: Check use relevant portion of app config here.
+
+                builder.add_host_component(key_value::KeyValueComponent::new(
+                    key_value::Config {
+                        configs: [(
+                            "".to_owned(),
+                            key_value::ImplConfig::Sqlite(key_value::sqlite::Config::Path(
+                                parent_dir.join("sqlite_key_value.db"),
+                            )),
+                        )]
+                        .into_iter()
+                        .collect(),
+                    },
+                ))?;
 
                 self.loader.add_dynamic_host_component(
                     &mut builder,

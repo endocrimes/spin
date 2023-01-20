@@ -1,20 +1,21 @@
-type namespace = u32
+type store = u32
 
 variant error {
-  namespace-table-full,
-  invalid-namespace,
+  store-table-full,
+  store-not-found,
+  invalid-store,
   no-such-key,
-  store(string)
+  runtime(string)
 }
 
-open: func(name: string) -> expected<namespace, error>
+open: func(name: string) -> expected<store, error>
 
-get: func(namespace: namespace, key: string) -> expected<list<u8>, error>
+get: func(store: store, key: string) -> expected<list<u8>, error>
 
-set: func(namespace: namespace, key: string, value: list<u8>) -> expected<unit, error>
+set: func(store: store, key: string, value: list<u8>) -> expected<unit, error>
 
-delete: func(namespace: namespace, key: string) -> expected<unit, error>
+delete: func(store: store, key: string) -> expected<unit, error>
 
-exists: func(namespace: namespace, key: string) -> expected<bool, error>
+exists: func(store: store, key: string) -> expected<bool, error>
 
-close: func(namespace: namespace)
+close: func(store: store)

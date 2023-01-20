@@ -1,5 +1,5 @@
 [package]
-name    = "simple-spin-rust"
+name    = "spin-key-value"
 version = "0.1.0"
 edition = "2021"
 
