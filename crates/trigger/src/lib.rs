@@ -101,7 +101,7 @@ impl<Executor: TriggerExecutor> TriggerExecutorBuilder<Executor> {
                     None => PathBuf::new(),
                 };
 
-                // TODO: Check use relevant portion of app config here.
+                // TODO: Use relevant portion of app config here.
 
                 builder.add_host_component(key_value::KeyValueComponent::new(
                     key_value::Config {
