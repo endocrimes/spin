@@ -7,7 +7,7 @@ use spin_sdk::{
 
 #[http_component]
 fn handle_request(_req: Request) -> Result<Response> {
-    let store = Store::open("foo")?;
+    let store = Store::open("")?;
 
     store.delete("bar")?;
 

@@ -2,7 +2,7 @@ type store = u32
 
 variant error {
   store-table-full,
-  store-not-found,
+  no-such-store,
   invalid-store,
   no-such-key,
   runtime(string)

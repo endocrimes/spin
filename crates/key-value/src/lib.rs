@@ -79,14 +79,11 @@ impl KeyValue for KeyValueDispatch {
     async fn open(&mut self, name: &str) -> Result<Store, Error> {
         self.stores
             .push(
-                if self.impls.contains_key(name) {
-                    self.impls.get_mut(name)
-                } else {
-                    self.impls.get_mut("")
-                }
-                .ok_or(Error::StoreNotFound)?
-                .open(name)
-                .await?,
+                self.impls
+                    .get_mut(name)
+                    .ok_or(Error::NoSuchStore)?
+                    .open(name)
+                    .await?,
             )
             .map_err(|()| Error::StoreTableFull)
     }
@@ -150,7 +147,9 @@ mod test {
             Err(Error::InvalidStore)
         ));
 
-        let store = kv.open("foo").await?;
+        assert!(matches!(kv.open("foo").await, Err(Error::NoSuchStore)));
+
+        let store = kv.open("").await?;
 
         assert!(!kv.exists(store, "bar").await?);
 

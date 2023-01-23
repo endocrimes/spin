@@ -1,3 +1,9 @@
+//! Spin key-value persistent storage
+//!
+//! This module provides a generic interface for key-value storage, which may be implemented by the host various
+//! ways (e.g. via an in-memory table, a local file, or a remote database). Details such as consistency model and
+//! durability will depend on the implementation an may vary from one to store to the next.
+
 wit_bindgen_rust::import!("../../wit/ephemeral/key-value.wit");
 
 use key_value::Store as RawStore;
@@ -11,6 +17,9 @@ pub struct Store(RawStore);
 
 impl Store {
     /// Open the specified store.
+    ///
+    /// If `name` is empty, open the default store.  Other stores may also be available depending on the app
+    /// configuration.
     pub fn open(name: impl AsRef<str>) -> Result<Self, Error> {
         key_value::open(name.as_ref()).map(Self)
     }
