@@ -24,6 +24,13 @@ impl Store {
         key_value::open(name.as_ref()).map(Self)
     }
 
+    /// Open the default store.
+    ///
+    /// This is equivalent to `Store::open("")`.
+    pub fn default() -> Result<Self, Error> {
+        Self::open("")
+    }
+
     /// Get the value, if any, associated with the specified key in this store.
     ///
     /// If no value is found, this will return `Err(Error::NoSuchKey)`.

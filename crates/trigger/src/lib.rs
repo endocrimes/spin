@@ -23,6 +23,7 @@ use spin_core::{Config, Engine, EngineBuilder, Instance, InstancePre, Store, Sto
 
 const SPIN_HOME: &str = ".spin";
 const SPIN_CONFIG_ENV_PREFIX: &str = "SPIN_APP";
+const DEFAULT_SQLITE_DB_FILENAME: &str = "sqlite_key_value.db";
 
 #[async_trait]
 pub trait TriggerExecutor: Sized {
@@ -101,14 +102,17 @@ impl<Executor: TriggerExecutor> TriggerExecutorBuilder<Executor> {
                     None => PathBuf::new(),
                 };
 
-                // TODO: Use relevant portion of app config here.
-
                 builder.add_host_component(key_value::KeyValueComponent::new(
                     key_value::Config {
+                        // The default key-value store is defined to be an SQLite database residing under the
+                        // user's `.spin` directory.  Once we have runtime configuration for key-value stores, the
+                        // user will be able to change both the default store configuration (e.g. use Redis, or an
+                        // SQLite in-memory database, or use a different path) and add other named stores with
+                        // their own configurations.
                         configs: [(
                             "".to_owned(),
                             key_value::ImplConfig::Sqlite(key_value::sqlite::Config::Path(
-                                parent_dir.join("sqlite_key_value.db"),
+                                parent_dir.join(DEFAULT_SQLITE_DB_FILENAME),
                             )),
                         )]
                         .into_iter()

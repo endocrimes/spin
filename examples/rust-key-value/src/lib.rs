@@ -9,7 +9,7 @@ use spin_sdk::{
 #[http_component]
 fn handle_request(req: Request) -> Result<Response> {
     // Open the default key-value store
-    let store = Store::open("")?;
+    let store = Store::default()?;
 
     let (status, body) = match req.method() {
         &Method::POST => {
