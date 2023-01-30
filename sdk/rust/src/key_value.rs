@@ -2,7 +2,7 @@
 //!
 //! This module provides a generic interface for key-value storage, which may be implemented by the host various
 //! ways (e.g. via an in-memory table, a local file, or a remote database). Details such as consistency model and
-//! durability will depend on the implementation an may vary from one to store to the next.
+//! durability will depend on the implementation and may vary from one to store to the next.
 
 wit_bindgen_rust::import!("../../wit/ephemeral/key-value.wit");
 
@@ -27,7 +27,7 @@ impl Store {
     /// Open the default store.
     ///
     /// This is equivalent to `Store::open("")`.
-    pub fn default() -> Result<Self, Error> {
+    pub fn try_default() -> Result<Self, Error> {
         Self::open("")
     }
 
@@ -66,7 +66,7 @@ impl Drop for Store {
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
