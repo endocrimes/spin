@@ -23,7 +23,7 @@ impl std::error::Error for Error {}
 
 #[derive(Clone)]
 pub enum ImplConfig {
-    Sqlite(sqlite::Config),
+    Sqlite(sqlite::DatabaseLocation),
 }
 
 #[derive(Clone)]
@@ -62,8 +62,8 @@ impl KeyValueDispatch {
                     (
                         name,
                         match config {
-                            ImplConfig::Sqlite(config) => {
-                                Box::new(sqlite::KeyValueSqlite::new(config)) as Box<dyn Impl>
+                            ImplConfig::Sqlite(location) => {
+                                Box::new(sqlite::KeyValueSqlite::new(location)) as Box<dyn Impl>
                             }
                         },
                     )
@@ -137,9 +137,12 @@ mod test {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn all() -> Result<()> {
         let mut kv = KeyValueDispatch::new(Config {
-            configs: [("".to_owned(), ImplConfig::Sqlite(sqlite::Config::InMemory))]
-                .into_iter()
-                .collect(),
+            configs: [(
+                "".to_owned(),
+                ImplConfig::Sqlite(sqlite::DatabaseLocation::InMemory),
+            )]
+            .into_iter()
+            .collect(),
         });
 
         assert!(matches!(

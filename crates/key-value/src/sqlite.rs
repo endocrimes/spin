@@ -9,20 +9,20 @@ use tokio::task;
 use wit_bindgen_wasmtime::async_trait;
 
 #[derive(Clone)]
-pub enum Config {
+pub enum DatabaseLocation {
     InMemory,
     Path(PathBuf),
 }
 
 pub struct KeyValueSqlite {
-    config: Config,
+    location: DatabaseLocation,
     connection: Option<Arc<Mutex<Connection>>>,
 }
 
 impl KeyValueSqlite {
-    pub fn new(config: Config) -> Self {
+    pub fn new(location: DatabaseLocation) -> Self {
         Self {
-            config,
+            location,
             connection: None,
         }
     }
@@ -33,9 +33,9 @@ impl Impl for KeyValueSqlite {
     async fn open(&mut self, name: &str) -> Result<Box<dyn ImplStore>, Error> {
         if self.connection.is_none() {
             task::block_in_place(|| {
-                let connection = match &self.config {
-                    Config::InMemory => Connection::open_in_memory(),
-                    Config::Path(path) => Connection::open(path),
+                let connection = match &self.location {
+                    DatabaseLocation::InMemory => Connection::open_in_memory(),
+                    DatabaseLocation::Path(path) => Connection::open(path),
                 }
                 .map_err(log_error)?;
 
