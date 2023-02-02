@@ -103,6 +103,7 @@ impl HttpTestConfig {
             .build(
                 TEST_APP_URI.to_string(),
                 TriggerExecutorBuilderConfig::default(),
+                None,
             )
             .await
             .unwrap()
@@ -142,6 +143,7 @@ impl RedisTestConfig {
             .build(
                 TEST_APP_URI.to_string(),
                 TriggerExecutorBuilderConfig::default(),
+                None,
             )
             .await
             .unwrap()

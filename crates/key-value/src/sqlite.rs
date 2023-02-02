@@ -34,8 +34,19 @@ impl Impl for KeyValueSqlite {
         if self.connection.is_none() {
             task::block_in_place(|| {
                 let connection = match &self.location {
-                    DatabaseLocation::InMemory => Connection::open_in_memory(),
-                    DatabaseLocation::Path(path) => Connection::open(path),
+                    DatabaseLocation::InMemory => {
+                        println!(
+                            "Using in-memory key-value store (use `--key-value-file` to override)"
+                        );
+                        Connection::open_in_memory()
+                    }
+                    DatabaseLocation::Path(path) => {
+                        println!(
+                            "Using {} for key-value store (use `--key-value-file` to override)",
+                            path.display()
+                        );
+                        Connection::open(path)
+                    }
                 }
                 .map_err(log_error)?;
 

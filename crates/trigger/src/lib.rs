@@ -23,7 +23,6 @@ use spin_core::{Config, Engine, EngineBuilder, Instance, InstancePre, Store, Sto
 
 const SPIN_HOME: &str = ".spin";
 const SPIN_CONFIG_ENV_PREFIX: &str = "SPIN_APP";
-const DEFAULT_SQLITE_DB_FILENAME: &str = "sqlite_key_value.db";
 
 #[async_trait]
 pub trait TriggerExecutor: Sized {
@@ -85,6 +84,7 @@ impl<Executor: TriggerExecutor> TriggerExecutorBuilder<Executor> {
         mut self,
         app_uri: String,
         builder_config: config::TriggerExecutorBuilderConfig,
+        key_value_file: Option<&Path>,
     ) -> Result<Executor>
     where
         Executor::TriggerConfig: DeserializeOwned,
@@ -96,26 +96,22 @@ impl<Executor: TriggerExecutor> TriggerExecutorBuilder<Executor> {
                 builder.add_host_component(outbound_redis::OutboundRedisComponent)?;
                 builder.add_host_component(outbound_pg::OutboundPg::default())?;
                 builder.add_host_component(outbound_mysql::OutboundMysql::default())?;
-
-                let parent_dir = match dirs::home_dir() {
-                    Some(home) => home.join(SPIN_HOME),
-                    None => PathBuf::new(),
-                };
-
                 builder.add_host_component(key_value::KeyValueComponent::new(
                     key_value::Config {
-                        // The default key-value store is defined to be an SQLite database residing under the
-                        // user's `.spin` directory (TODO: each app should have its own, unique database --
-                        // location TBD).  Once we have runtime configuration for key-value stores, the user will
-                        // be able to change both the default store configuration (e.g. use Redis, or an SQLite
-                        // in-memory database, or use a different path) and add other named stores with their own
+                        // TODO: Once we have runtime configuration for key-value stores, the user will be able to
+                        // both change the default store configuration (e.g. use Redis, or an SQLite in-memory
+                        // database, or use a different path) and add other named stores with their own
                         // configurations.
                         configs: [(
-                            "".to_owned(),
+                            String::new(),
                             key_value::ImplConfig::Sqlite(
-                                key_value::sqlite::DatabaseLocation::Path(
-                                    parent_dir.join(DEFAULT_SQLITE_DB_FILENAME),
-                                ),
+                                if let Some(key_value_file) = key_value_file {
+                                    key_value::sqlite::DatabaseLocation::Path(
+                                        key_value_file.to_owned(),
+                                    )
+                                } else {
+                                    key_value::sqlite::DatabaseLocation::InMemory
+                                },
                             ),
                         )]
                         .into_iter()

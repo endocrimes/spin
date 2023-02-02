@@ -1,4 +1,7 @@
-use std::path::PathBuf;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{Context, Result};
 use clap::{Args, IntoApp, Parser};
@@ -17,10 +20,16 @@ pub const DISABLE_WASMTIME_CACHE: &str = "DISABLE_WASMTIME_CACHE";
 pub const FOLLOW_LOG_OPT: &str = "FOLLOW_ID";
 pub const WASMTIME_CACHE_FILE: &str = "WASMTIME_CACHE_FILE";
 pub const RUNTIME_CONFIG_FILE: &str = "RUNTIME_CONFIG_FILE";
+pub const KEY_VALUE_FILE: &str = "KEY_VALUE_FILE";
 
 // Set by `spin up`
 pub const SPIN_LOCKED_URL: &str = "SPIN_LOCKED_URL";
 pub const SPIN_WORKING_DIR: &str = "SPIN_WORKING_DIR";
+// Set by `spin up` only for local apps
+pub const SPIN_LOCAL_APP_DIR: &str = "SPIN_LOCAL_APP_DIR";
+
+const DEFAULT_SQLITE_DB_DIRECTORY: &str = ".spin";
+const DEFAULT_SQLITE_DB_FILENAME: &str = "sqlite_key_value.db";
 
 /// A command that runs a TriggerExecutor.
 #[derive(Parser, Debug)]
@@ -31,10 +40,10 @@ where
 {
     /// Log directory for the stdout and stderr of components.
     #[clap(
-            name = APP_LOG_DIR,
-            short = 'L',
-            long = "log-dir",
-            )]
+        name = APP_LOG_DIR,
+        short = 'L',
+        long = "log-dir",
+    )]
     pub log: Option<PathBuf>,
 
     /// Disable Wasmtime cache.
@@ -61,14 +70,14 @@ where
         name = FOLLOW_LOG_OPT,
         long = "follow",
         multiple_occurrences = true,
-        )]
+    )]
     pub follow_components: Vec<String>,
 
     /// Print all component output to stdout/stderr
     #[clap(
         long = "follow-all",
         conflicts_with = FOLLOW_LOG_OPT,
-        )]
+    )]
     pub follow_all_components: bool,
 
     /// Set the static assets of the components in the temporary directory as writable.
@@ -82,6 +91,9 @@ where
         env = RUNTIME_CONFIG_FILE,
     )]
     pub runtime_config_file: Option<PathBuf>,
+
+    #[clap(long, env = KEY_VALUE_FILE)]
+    pub key_value_file: Option<PathBuf>,
 
     #[clap(flatten)]
     pub run_config: Executor::RunConfig,
@@ -116,6 +128,18 @@ where
         // Required env vars
         let working_dir = std::env::var(SPIN_WORKING_DIR).context(SPIN_WORKING_DIR)?;
         let locked_url = std::env::var(SPIN_LOCKED_URL).context(SPIN_LOCKED_URL)?;
+        // Optional env var, set only for local apps
+        let local_app_dir = std::env::var_os(SPIN_LOCAL_APP_DIR);
+
+        let key_value_file = self.key_value_file.clone().or_else(|| {
+            // No key-value file specified -- attempt to create or reuse a database file inside the app
+            // directory.  If that's not successful, we'll use an in-memory database.
+            let directory = Path::new(&local_app_dir?).join(DEFAULT_SQLITE_DB_DIRECTORY);
+
+            fs::create_dir_all(&directory).ok()?;
+
+            Some(directory.join(DEFAULT_SQLITE_DB_FILENAME))
+        });
 
         // TODO: I assume there is a way to do this with a single let mut loader: Box<dyn Loader>
         // variable instead of the entire executor.
@@ -136,7 +160,9 @@ where
                     StdioLoggingTriggerHooks::new(self.follow_components(), self.log);
                 builder.hooks(logging_hooks);
 
-                builder.build(locked_url, trigger_config).await?
+                builder
+                    .build(locked_url, trigger_config, key_value_file.as_deref())
+                    .await?
             }
             false => {
                 let loader = TriggerLoader::new(working_dir, self.allow_transient_write);
@@ -153,7 +179,9 @@ where
                     StdioLoggingTriggerHooks::new(self.follow_components(), self.log);
                 builder.hooks(logging_hooks);
 
-                builder.build(locked_url, trigger_config).await?
+                builder
+                    .build(locked_url, trigger_config, key_value_file.as_deref())
+                    .await?
             }
         };
 

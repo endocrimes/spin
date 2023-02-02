@@ -9,7 +9,7 @@ use clap::{CommandFactory, Parser};
 use reqwest::Url;
 use spin_loader::bindle::BindleConnectionInfo;
 use spin_manifest::ApplicationTrigger;
-use spin_trigger::cli::{SPIN_LOCKED_URL, SPIN_WORKING_DIR};
+use spin_trigger::cli::{SPIN_LOCAL_APP_DIR, SPIN_LOCKED_URL, SPIN_WORKING_DIR};
 use tempfile::TempDir;
 
 use crate::opts::*;
@@ -131,6 +131,7 @@ impl UpCommand {
             return self.run_trigger(
                 trigger_command(HELP_ARGS_ONLY_TRIGGER_TYPE),
                 TriggerExecOpts::NoApp,
+                None,
             );
         }
 
@@ -139,12 +140,17 @@ impl UpCommand {
             Some(d) => WorkingDirectory::Given(d.to_owned()),
         };
         let working_dir = working_dir_holder.path().canonicalize()?;
+        let mut local_app_dir = None;
 
         let mut app = match (&self.app, &self.bindle) {
             (app, None) => {
                 let manifest_file = app
                     .as_deref()
                     .unwrap_or_else(|| DEFAULT_MANIFEST_FILE.as_ref());
+                local_app_dir = manifest_file
+                    .canonicalize()?
+                    .parent()
+                    .map(|path| path.to_owned());
                 let bindle_connection = self.bindle_connection();
                 let asset_dst = if self.direct_mounts {
                     None
@@ -183,13 +189,14 @@ impl UpCommand {
             TriggerExecOpts::App { app, working_dir }
         };
 
-        self.run_trigger(trigger_type, exec_opts)
+        self.run_trigger(trigger_type, exec_opts, local_app_dir.as_deref())
     }
 
     fn run_trigger(
         self,
         trigger_type: Vec<String>,
         exec_opts: TriggerExecOpts,
+        local_app_dir: Option<&Path>,
     ) -> Result<(), anyhow::Error> {
         // The docs for `current_exe` warn that this may be insecure because it could be executed
         // via hard-link. I think it should be fine as long as we aren't `setuid`ing this binary.
@@ -205,6 +212,10 @@ impl UpCommand {
                 cmd.env(SPIN_LOCKED_URL, locked_url)
                     .env(SPIN_WORKING_DIR, &working_dir)
                     .args(&self.trigger_args);
+
+                if let Some(local_app_dir) = local_app_dir {
+                    cmd.env(SPIN_LOCAL_APP_DIR, local_app_dir);
+                }
             }
         }
 
