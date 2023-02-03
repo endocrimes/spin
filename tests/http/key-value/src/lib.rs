@@ -25,7 +25,11 @@ fn handle_request(_req: Request) -> Result<Response> {
 
     ensure!(b"wow" as &[_] == &store.get("bar")?);
 
+    ensure!(&["bar".to_owned()] as &[_] == &store.get_keys()?);
+
     store.delete("bar")?;
+
+    ensure!(&[] as &[String] == &store.get_keys()?);
 
     ensure!(!store.exists("bar")?);
 

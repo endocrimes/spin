@@ -45,6 +45,8 @@ trait ImplStore: Sync + Send {
     async fn delete(&self, key: &str) -> Result<(), Error>;
 
     async fn exists(&self, key: &str) -> Result<bool, Error>;
+
+    async fn get_keys(&self) -> Result<Vec<String>, Error>;
 }
 
 pub struct KeyValueDispatch {
@@ -120,6 +122,14 @@ impl KeyValue for KeyValueDispatch {
             .await
     }
 
+    async fn get_keys(&mut self, store: Store) -> Result<Vec<String>, Error> {
+        self.stores
+            .get(store)
+            .ok_or(Error::InvalidStore)?
+            .get_keys()
+            .await
+    }
+
     async fn close(&mut self, store: Store) {
         self.stores.remove(store);
     }
@@ -127,7 +137,7 @@ impl KeyValue for KeyValueDispatch {
 
 fn log_error(err: impl std::fmt::Debug) -> Error {
     tracing::warn!("SQLite error: {err:?}");
-    Error::Runtime(format!("{err:?}"))
+    Error::Io(format!("{err:?}"))
 }
 
 #[cfg(test)]
@@ -168,9 +178,13 @@ mod test {
 
         assert_eq!(b"wow" as &[_], &kv.get(store, "bar").await?);
 
+        assert_eq!(&["bar".to_owned()] as &[_], &kv.get_keys(store).await?);
+
         kv.delete(store, "bar").await?;
 
         assert!(!kv.exists(store, "bar").await?);
+
+        assert_eq!(&[] as &[String], &kv.get_keys(store).await?);
 
         assert!(matches!(kv.get(store, "bar").await, Err(Error::NoSuchKey)));
 

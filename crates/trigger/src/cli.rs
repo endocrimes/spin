@@ -20,7 +20,6 @@ pub const DISABLE_WASMTIME_CACHE: &str = "DISABLE_WASMTIME_CACHE";
 pub const FOLLOW_LOG_OPT: &str = "FOLLOW_ID";
 pub const WASMTIME_CACHE_FILE: &str = "WASMTIME_CACHE_FILE";
 pub const RUNTIME_CONFIG_FILE: &str = "RUNTIME_CONFIG_FILE";
-pub const KEY_VALUE_FILE: &str = "KEY_VALUE_FILE";
 
 // Set by `spin up`
 pub const SPIN_LOCKED_URL: &str = "SPIN_LOCKED_URL";
@@ -92,9 +91,6 @@ where
     )]
     pub runtime_config_file: Option<PathBuf>,
 
-    #[clap(long, env = KEY_VALUE_FILE)]
-    pub key_value_file: Option<PathBuf>,
-
     #[clap(flatten)]
     pub run_config: Executor::RunConfig,
 
@@ -128,18 +124,8 @@ where
         // Required env vars
         let working_dir = std::env::var(SPIN_WORKING_DIR).context(SPIN_WORKING_DIR)?;
         let locked_url = std::env::var(SPIN_LOCKED_URL).context(SPIN_LOCKED_URL)?;
-        // Optional env var, set only for local apps
-        let local_app_dir = std::env::var_os(SPIN_LOCAL_APP_DIR);
 
-        let key_value_file = self.key_value_file.clone().or_else(|| {
-            // No key-value file specified -- attempt to create or reuse a database file inside the app
-            // directory.  If that's not successful, we'll use an in-memory database.
-            let directory = Path::new(&local_app_dir?).join(DEFAULT_SQLITE_DB_DIRECTORY);
-
-            fs::create_dir_all(&directory).ok()?;
-
-            Some(directory.join(DEFAULT_SQLITE_DB_FILENAME))
-        });
+        let key_value_file = key_value_file_location();
 
         // TODO: I assume there is a way to do this with a single let mut loader: Box<dyn Loader>
         // variable instead of the entire executor.
@@ -226,6 +212,19 @@ where
         }
         Ok(())
     }
+}
+
+fn key_value_file_location() -> Option<PathBuf> {
+    // Optional env var, set only for local apps:
+    let local_app_dir = std::env::var_os(SPIN_LOCAL_APP_DIR);
+
+    // Attempt to create or reuse a database file inside the app directory.  If that's not successful, we'll use an
+    // in-memory database.
+    let directory = Path::new(&local_app_dir?).join(DEFAULT_SQLITE_DB_DIRECTORY);
+
+    fs::create_dir_all(&directory).ok()?;
+
+    Some(directory.join(DEFAULT_SQLITE_DB_FILENAME))
 }
 
 const SLOTH_WARNING_DELAY_MILLIS: u64 = 1250;

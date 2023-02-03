@@ -56,6 +56,11 @@ impl Store {
     pub fn exists(&self, key: impl AsRef<str>) -> Result<bool, Error> {
         key_value::exists(self.0, key.as_ref())
     }
+
+    /// Get the set of keys in this store.
+    pub fn get_keys(&self) -> Result<Vec<String>, Error> {
+        key_value::get_keys(self.0)
+    }
 }
 
 impl Drop for Store {

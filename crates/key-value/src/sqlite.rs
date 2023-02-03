@@ -134,4 +134,18 @@ impl ImplStore for SqliteStore {
             Err(e) => Err(e),
         }
     }
+
+    async fn get_keys(&self) -> Result<Vec<String>, Error> {
+        task::block_in_place(|| {
+            self.connection
+                .lock()
+                .unwrap()
+                .prepare_cached("SELECT key FROM spin_key_value WHERE store=$1")
+                .map_err(log_error)?
+                .query_map([&self.name], |row| row.get(0))
+                .map_err(log_error)?
+                .map(|r| r.map_err(log_error))
+                .collect()
+        })
+    }
 }
