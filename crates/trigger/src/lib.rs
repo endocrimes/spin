@@ -104,16 +104,8 @@ impl<Executor: TriggerExecutor> TriggerExecutorBuilder<Executor> {
                         // configurations.
                         configs: [(
                             String::new(),
-                            key_value::ImplConfig::Sqlite(
-                                if let Some(key_value_file) = key_value_file {
-                                    key_value::sqlite::DatabaseLocation::Path(
-                                        key_value_file.to_owned(),
-                                    )
-                                } else {
-                                    key_value::sqlite::DatabaseLocation::InMemory
-                                },
-                            ),
-                        )]
+                            key_value::ImplConfig::Cloud())
+                        ]
                         .into_iter()
                         .collect(),
                     },

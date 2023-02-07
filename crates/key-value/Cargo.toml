@@ -8,9 +8,12 @@ edition = { workspace = true }
 doctest = false
 
 [dependencies]
+bytes = "1"
 anyhow = "1.0"
+async-std = "1.12.0"
 rusqlite = { version = "0.28.0", features = [ "bundled" ] }
 tokio = { version = "1", features = [ "macros" ] }
 spin-core = { path = "../core" }
 tracing = { workspace = true }
+cloud-kv = { path = "../cloud-kv" }
 wit-bindgen-wasmtime = { workspace = true }

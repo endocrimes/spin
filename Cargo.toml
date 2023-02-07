@@ -108,6 +108,7 @@ members = [
   "crates/templates",
   "crates/testing",
   "crates/trigger",
+  "crates/cloud-kv",
   "sdk/rust",
   "sdk/rust/macro",
   "crates/e2e-testing"

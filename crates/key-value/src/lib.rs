@@ -5,6 +5,7 @@ use wit_bindgen_wasmtime::async_trait;
 
 mod host_component;
 pub mod sqlite;
+pub mod cloud;
 mod table;
 
 pub use host_component::KeyValueComponent;
@@ -24,6 +25,7 @@ impl std::error::Error for Error {}
 #[derive(Clone)]
 pub enum ImplConfig {
     Sqlite(sqlite::DatabaseLocation),
+    Cloud(),
 }
 
 #[derive(Clone)]
@@ -66,7 +68,10 @@ impl KeyValueDispatch {
                         match config {
                             ImplConfig::Sqlite(location) => {
                                 Box::new(sqlite::KeyValueSqlite::new(location)) as Box<dyn Impl>
-                            }
+                            },
+                            ImplConfig::Cloud() => {
+                                Box::new(cloud::KeyValueCloud::new()) as Box<dyn Impl>
+                            },
                         },
                     )
                 })

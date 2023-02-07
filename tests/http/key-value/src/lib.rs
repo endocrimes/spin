@@ -4,36 +4,22 @@ use spin_sdk::{
     http_component,
     key_value::{Error, Store},
 };
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize, Serialize, Default)]
+pub struct Data {
+    view_count: u64
+}
 
 #[http_component]
 fn handle_request(_req: Request) -> Result<Response> {
     let store = Store::open("")?;
 
-    store.delete("bar")?;
-
-    ensure!(!store.exists("bar")?);
-
-    ensure!(matches!(store.get("bar"), Err(Error::NoSuchKey)));
-
-    store.set("bar", b"baz")?;
-
-    ensure!(store.exists("bar")?);
-
-    ensure!(b"baz" as &[_] == &store.get("bar")?);
-
-    store.set("bar", b"wow")?;
-
-    ensure!(b"wow" as &[_] == &store.get("bar")?);
-
-    ensure!(&["bar".to_owned()] as &[_] == &store.get_keys()?);
-
-    store.delete("bar")?;
-
-    ensure!(&[] as &[String] == &store.get_keys()?);
-
-    ensure!(!store.exists("bar")?);
-
-    ensure!(matches!(store.get("bar"), Err(Error::NoSuchKey)));
-
-    Ok(http::Response::builder().status(200).body(None)?)
+    let raw = store.get("/app-data").unwrap_or_default();
+    let mut data: Data = serde_json::from_slice(&raw[..]).unwrap_or_default();
+    data.view_count += 1;
+    let new = serde_json::to_vec(&data).unwrap_or_default();
+    store.set("/app-data", new)?;
+    let response = serde_json::to_string(&data).unwrap_or_default();
+    Ok(http::Response::builder().status(200).body(Some(response.into()))?)
 }
