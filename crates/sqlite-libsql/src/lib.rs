@@ -7,9 +7,13 @@ pub struct LibsqlClient {
 
 impl LibsqlClient {
     pub fn create(url: &str, token: String) -> anyhow::Result<Self> {
+        Self::create_with_custom_client(url, token, libsql_client::reqwest::HttpClient::new())
+    }
+
+    pub fn create_with_custom_client(url: &str, token: String, client: libsql_client::reqwest::HttpClient) -> anyhow::Result<Self> {
         let config = libsql_client::Config::new(url)?.with_auth_token(token);
         let inner = libsql_client::http::Client::from_config(
-            libsql_client::http::InnerClient::Reqwest(libsql_client::reqwest::HttpClient::new()),
+            libsql_client::http::InnerClient::Reqwest(client),
             config,
         )?;
         Ok(Self { inner })
