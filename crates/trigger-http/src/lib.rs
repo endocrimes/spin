@@ -11,7 +11,7 @@ use std::{
     net::{Ipv4Addr, SocketAddr, ToSocketAddrs},
     path::PathBuf,
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 use anyhow::{Context, Result};
@@ -65,12 +65,54 @@ pub(crate) type Store = spin_core::Store<RuntimeData>;
 
 /// The Spin HTTP trigger.
 pub struct HttpTrigger {
-    engine: Arc<TriggerAppEngine<Self>>,
+    engine: Arc<HttpTriggerEngine>,
     router: Router,
     // Base path for component routes.
     base: String,
     // Component ID -> component trigger config
     component_trigger_configs: HashMap<String, HttpTriggerConfig>,
+}
+
+struct HttpTriggerEngine {
+    trigger: TriggerAppEngine<HttpTrigger>,
+    cached_instances: Mutex<HashMap<String, Vec<(HttpComponentInstance, Store)>>>,
+}
+
+impl HttpTriggerEngine {
+    fn new(trigger: TriggerAppEngine<HttpTrigger>) -> HttpTriggerEngine {
+        HttpTriggerEngine {
+            trigger,
+            cached_instances: Mutex::default(),
+        }
+    }
+
+    async fn prepare_instance(&self, component_id: &str) -> Result<(HttpInstance, Store)> {
+        {
+            let mut cache = self.cached_instances.lock().unwrap();
+            if let Some((instance, store)) = cache.get_mut(component_id).and_then(|v| v.pop()) {
+                return Ok((HttpInstance::Component(instance), store));
+            }
+        }
+        self.trigger.prepare_instance(component_id).await
+    }
+
+    fn return_instance(
+        &self,
+        component_id: &str,
+        mut instance: HttpComponentInstance,
+        store: Store,
+    ) {
+        if instance.remaining_requests == 0 {
+            return;
+        }
+        instance.remaining_requests -= 1;
+
+        let mut cache = self.cached_instances.lock().unwrap();
+        let slot = cache.entry(component_id.to_string()).or_insert(Vec::new());
+        if slot.len() < 100 {
+            slot.push((instance, store));
+        }
+    }
 }
 
 #[derive(Args)]
@@ -102,13 +144,19 @@ impl CliArgs {
 }
 
 pub enum HttpInstancePre {
-    Component(spin_core::InstancePre<RuntimeData>, HandlerType),
+    Component(spin_core::InstancePre<RuntimeData>, HandlerType, u32),
     Module(spin_core::ModuleInstancePre<RuntimeData>),
 }
 
 pub enum HttpInstance {
-    Component(spin_core::Instance, HandlerType),
+    Component(HttpComponentInstance),
     Module(spin_core::ModuleInstance),
+}
+
+pub struct HttpComponentInstance {
+    instance: spin_core::Instance,
+    ty: HandlerType,
+    remaining_requests: u32,
 }
 
 #[async_trait]
@@ -159,7 +207,7 @@ impl TriggerExecutor for HttpTrigger {
             .collect();
 
         Ok(Self {
-            engine: Arc::new(engine),
+            engine: Arc::new(HttpTriggerEngine::new(engine)),
             router,
             base,
             component_trigger_configs,
@@ -209,16 +257,20 @@ impl TriggerInstancePre<RuntimeData, HttpTriggerConfig> for HttpInstancePre {
             Ok(HttpInstancePre::Component(
                 engine.instantiate_pre(&comp)?,
                 handler_ty,
+                config.requests_per_instance.unwrap_or(0),
             ))
         }
     }
 
     async fn instantiate(&self, store: &mut Store) -> Result<HttpInstance> {
         match self {
-            HttpInstancePre::Component(pre, ty) => Ok(HttpInstance::Component(
-                pre.instantiate_async(store).await?,
-                *ty,
-            )),
+            HttpInstancePre::Component(pre, ty, requests_per_instance) => {
+                Ok(HttpInstance::Component(HttpComponentInstance {
+                    instance: pre.instantiate_async(store).await?,
+                    ty: *ty,
+                    remaining_requests: *requests_per_instance,
+                }))
+            }
             HttpInstancePre::Module(pre) => {
                 pre.instantiate_async(store).await.map(HttpInstance::Module)
             }
@@ -242,7 +294,7 @@ impl HttpTrigger {
 
         log::info!(
             "Processing request for application {} on URI {}",
-            &self.engine.app_name,
+            &self.engine.trigger.app_name,
             req.uri()
         );
 
@@ -266,7 +318,7 @@ impl HttpTrigger {
                 spin_telemetry::metrics::monotonic_counter!(
                     spin.request_count = 1,
                     trigger_type = "http",
-                    app_id = &self.engine.app_name,
+                    app_id = &self.engine.trigger.app_name,
                     component_id = route_match.component_id()
                 );
 
@@ -279,13 +331,7 @@ impl HttpTrigger {
                 let res = match executor {
                     HttpExecutorType::Http => {
                         HttpHandlerExecutor
-                            .execute(
-                                self.engine.clone(),
-                                &self.base,
-                                &route_match,
-                                req,
-                                client_addr,
-                            )
+                            .execute(&self.engine, &self.base, &route_match, req, client_addr)
                             .await
                     }
                     HttpExecutorType::Wagi(wagi_config) => {
@@ -293,13 +339,7 @@ impl HttpTrigger {
                             wagi_config: wagi_config.clone(),
                         };
                         executor
-                            .execute(
-                                self.engine.clone(),
-                                &self.base,
-                                &route_match,
-                                req,
-                                client_addr,
-                            )
+                            .execute(&self.engine, &self.base, &route_match, req, client_addr)
                             .await
                     }
                 };
@@ -321,7 +361,7 @@ impl HttpTrigger {
 
     /// Returns spin status information.
     fn app_info(&self, route: String) -> Result<Response<Body>> {
-        let info = AppInfo::new(self.engine.app());
+        let info = AppInfo::new(self.engine.trigger.app());
         let body = serde_json::to_vec_pretty(&info)?;
         Ok(MatchedRoute::with_response_extension(
             Response::builder()
@@ -447,7 +487,7 @@ impl HttpTrigger {
         println!("Available Routes:");
         for (route, component_id) in self.router.routes() {
             println!("  {}: {}{}", component_id, base_url, route);
-            if let Some(component) = self.engine.app().get_component(component_id) {
+            if let Some(component) = self.engine.trigger.app().get_component(component_id) {
                 if let Some(description) = component.get_metadata(APP_DESCRIPTION_KEY)? {
                     println!("    {}", description);
                 }
@@ -565,7 +605,7 @@ pub(crate) fn compute_default_headers(
 pub(crate) trait HttpExecutor: Clone + Send + Sync + 'static {
     async fn execute(
         &self,
-        engine: Arc<TriggerAppEngine<HttpTrigger>>,
+        engine: &Arc<HttpTriggerEngine>,
         base: &str,
         route_match: &RouteMatch,
         req: Request<Body>,
@@ -575,7 +615,7 @@ pub(crate) trait HttpExecutor: Clone + Send + Sync + 'static {
 
 #[derive(Clone)]
 struct ChainedRequestHandler {
-    engine: Arc<TriggerAppEngine<HttpTrigger>>,
+    engine: Arc<HttpTriggerEngine>,
     executor: HttpHandlerExecutor,
 }
 
@@ -617,7 +657,7 @@ impl HttpRuntimeData {
 
         let resp_fut = async move {
             match handler
-                .execute(engine.clone(), base, &route_match, request, client_addr)
+                .execute(&engine, base, &route_match, request, client_addr)
                 .await
             {
                 Ok(resp) => Ok(Ok(IncomingResponse {

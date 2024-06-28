@@ -1,6 +1,9 @@
 use std::{net::SocketAddr, str, str::FromStr};
 
-use crate::{Body, ChainedRequestHandler, HttpExecutor, HttpInstance, HttpTrigger, Store};
+use crate::{
+    Body, ChainedRequestHandler, HttpComponentInstance, HttpExecutor, HttpInstance,
+    HttpTriggerEngine, Store,
+};
 use anyhow::{anyhow, Context, Result};
 use futures::TryFutureExt;
 use http::{HeaderName, HeaderValue};
@@ -10,10 +13,9 @@ use outbound_http::OutboundHttpComponent;
 use spin_core::async_trait;
 use spin_core::wasi_2023_10_18::exports::wasi::http::incoming_handler::Guest as IncomingHandler2023_10_18;
 use spin_core::wasi_2023_11_10::exports::wasi::http::incoming_handler::Guest as IncomingHandler2023_11_10;
-use spin_core::{Component, Engine, Instance};
+use spin_core::{Component, Engine};
 use spin_http::body;
 use spin_http::routes::RouteMatch;
-use spin_trigger::TriggerAppEngine;
 use spin_world::v1::http_types;
 use std::sync::Arc;
 use tokio::{sync::oneshot, task};
@@ -28,7 +30,7 @@ impl HttpExecutor for HttpHandlerExecutor {
     #[instrument(name = "spin_trigger_http.execute_wasm", skip_all, err(level = Level::INFO), fields(otel.name = format!("execute_wasm_component {}", route_match.component_id())))]
     async fn execute(
         &self,
-        engine: Arc<TriggerAppEngine<HttpTrigger>>,
+        engine: &Arc<HttpTriggerEngine>,
         base: &str,
         route_match: &RouteMatch,
         req: Request<Body>,
@@ -42,20 +44,21 @@ impl HttpExecutor for HttpHandlerExecutor {
         );
 
         let (instance, mut store) = engine.prepare_instance(component_id).await?;
-        let HttpInstance::Component(instance, ty) = instance else {
+        let HttpInstance::Component(instance) = instance else {
             unreachable!()
         };
 
         set_http_origin_from_request(&mut store, engine.clone(), self, &req);
 
-        let resp = match ty {
+        let resp = match instance.ty {
             HandlerType::Spin => {
-                Self::execute_spin(store, instance, base, route_match, req, client_addr)
+                Self::execute_spin(store, instance, base, route_match, req, client_addr, engine)
                     .await
                     .map_err(contextualise_err)?
             }
             _ => {
-                Self::execute_wasi(store, instance, ty, base, route_match, req, client_addr).await?
+                Self::execute_wasi(store, instance, base, route_match, req, client_addr, engine)
+                    .await?
             }
         };
 
@@ -70,14 +73,16 @@ impl HttpExecutor for HttpHandlerExecutor {
 impl HttpHandlerExecutor {
     pub async fn execute_spin(
         mut store: Store,
-        instance: Instance,
+        instance: HttpComponentInstance,
         base: &str,
         route_match: &RouteMatch,
         req: Request<Body>,
         client_addr: SocketAddr,
+        engine: &Arc<HttpTriggerEngine>,
     ) -> Result<Response<Body>> {
         let headers = Self::headers(&req, base, route_match, client_addr)?;
         let func = instance
+            .instance
             .exports(&mut store)
             .instance("fermyon:spin/inbound-http")
             // Safe since we have already checked that this instance exists
@@ -132,6 +137,8 @@ impl HttpHandlerExecutor {
             None => body::empty(),
         };
 
+        engine.return_instance(route_match.component_id(), instance, store);
+
         Ok(response.body(body)?)
     }
 
@@ -150,12 +157,12 @@ impl HttpHandlerExecutor {
 
     async fn execute_wasi(
         mut store: Store,
-        instance: Instance,
-        ty: HandlerType,
+        instance: HttpComponentInstance,
         base: &str,
         route_match: &RouteMatch,
         mut req: Request<Body>,
         client_addr: SocketAddr,
+        engine: &Arc<HttpTriggerEngine>,
     ) -> anyhow::Result<Response<Body>> {
         let headers = Self::headers(&req, base, route_match, client_addr)?;
         req.headers_mut().clear();
@@ -185,8 +192,8 @@ impl HttpHandlerExecutor {
 
         let handler =
             {
-                let mut exports = instance.exports(&mut store);
-                match ty {
+                let mut exports = instance.instance.exports(&mut store);
+                match instance.ty {
                     HandlerType::Wasi2023_10_18 => {
                         let mut instance = exports
                             .instance(WASI_HTTP_EXPORT_2023_10_18)
@@ -205,13 +212,15 @@ impl HttpHandlerExecutor {
                     }
                     HandlerType::Wasi0_2 => {
                         drop(exports);
-                        Handler::Latest(Proxy::new(&mut store, &instance)?)
+                        Handler::Latest(Proxy::new(&mut store, &instance.instance)?)
                     }
                     HandlerType::Spin => panic!("should have used execute_spin instead"),
                 }
             };
 
         let span = tracing::debug_span!("execute_wasi");
+        let engine = engine.clone();
+        let component_id = route_match.component_id().to_string();
         let handle = task::spawn(
             async move {
                 let result = match handler {
@@ -240,6 +249,10 @@ impl HttpHandlerExecutor {
                     "wasi-http memory consumed: {}",
                     store.as_ref().data().memory_consumed()
                 );
+
+                if result.is_ok() {
+                    engine.return_instance(&component_id, instance, store);
+                }
 
                 result
             }
@@ -384,7 +397,7 @@ impl HandlerType {
 
 fn set_http_origin_from_request(
     store: &mut Store,
-    engine: Arc<TriggerAppEngine<HttpTrigger>>,
+    engine: Arc<HttpTriggerEngine>,
     handler: &HttpHandlerExecutor,
     req: &Request<Body>,
 ) {
@@ -392,6 +405,7 @@ fn set_http_origin_from_request(
         if let Some(scheme) = req.uri().scheme_str() {
             let origin = format!("{}://{}", scheme, authority);
             if let Some(outbound_http_handle) = engine
+                .trigger
                 .engine
                 .find_host_component_handle::<Arc<OutboundHttpComponent>>()
             {

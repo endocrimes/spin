@@ -1,17 +1,16 @@
 use std::{io::Cursor, net::SocketAddr, sync::Arc};
 
-use crate::HttpInstance;
+use crate::{HttpInstance, HttpTriggerEngine};
 use anyhow::{anyhow, ensure, Context, Result};
 use async_trait::async_trait;
 use http_body_util::BodyExt;
 use hyper::{Request, Response};
 use spin_core::WasiVersion;
 use spin_http::{config::WagiTriggerConfig, routes::RouteMatch, wagi};
-use spin_trigger::TriggerAppEngine;
 use tracing::{instrument, Level};
 use wasi_common_preview1::{pipe::WritePipe, I32Exit};
 
-use crate::{Body, HttpExecutor, HttpTrigger};
+use crate::{Body, HttpExecutor};
 
 #[derive(Clone)]
 pub struct WagiHttpExecutor {
@@ -23,7 +22,7 @@ impl HttpExecutor for WagiHttpExecutor {
     #[instrument(name = "spin_trigger_http.execute_wagi", skip_all, err(level = Level::INFO), fields(otel.name = format!("execute_wagi_component {}", route_match.component_id())))]
     async fn execute(
         &self,
-        engine: Arc<TriggerAppEngine<HttpTrigger>>,
+        engine: &Arc<HttpTriggerEngine>,
         base: &str,
         route_match: &RouteMatch,
         req: Request<Body>,
@@ -80,7 +79,9 @@ impl HttpExecutor for WagiHttpExecutor {
 
         let stdout = WritePipe::new_in_memory();
 
-        let mut store_builder = engine.store_builder(component, WasiVersion::Preview1)?;
+        let mut store_builder = engine
+            .trigger
+            .store_builder(component, WasiVersion::Preview1)?;
         // Set up Wagi environment
         store_builder.args(argv.split(' '))?;
         store_builder.env(headers)?;
@@ -88,6 +89,7 @@ impl HttpExecutor for WagiHttpExecutor {
         store_builder.stdout(Box::new(stdout.clone()))?;
 
         let (instance, mut store) = engine
+            .trigger
             .prepare_instance_with_store(component, store_builder)
             .await?;
 

@@ -11,6 +11,8 @@ pub struct HttpTriggerConfig {
     /// The HTTP executor the component requires
     #[serde(default)]
     pub executor: Option<HttpExecutorType>,
+    /// TODO
+    pub requests_per_instance: Option<u32>,
 }
 
 /// An HTTP trigger route
